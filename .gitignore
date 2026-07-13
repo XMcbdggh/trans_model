@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated runtime outputs (reproducible via pipeline)
+artifacts_web/
+scene_out/
+scene_out_compound/
+scene_ground_test/
+scene_prog_test/

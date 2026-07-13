@@ -1,0 +1,25 @@
+{
+  "meta": { "name": "two_storey_house", "style": "modern", "description": "simple detached house, 2 floors, gable roof" },
+  "site": {
+    "width_m": 20, "depth_m": 16,
+    "ground": { "surface": "grass" }
+  },
+  "buildings": [
+    {
+      "id": "house",
+      "footprint": [4, 4, 16, 12],
+      "floors": 2,
+      "floor_height_m": 3.2,
+      "material": "brick_masonry",
+      "roof": { "type": "gable" },
+      "windows": {
+        "shape": "rect", "width_m": 1.2, "height_m": 1.4, "sill_m": 0.9,
+        "per_facade": { "south": 3, "north": 3, "east": 1, "west": 1 }
+      },
+      "entrance": { "facade": "south", "type": "door", "shape": "rect", "width_m": 1.1, "height_m": 2.1 }
+    }
+  ],
+  "vegetation": [
+    { "kind": "tree", "positions": [[2, 2], [18, 2], [2, 14], [18, 14]] }
+  ]
+}

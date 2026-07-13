@@ -1,0 +1,208 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Building Spec",
+  "description": "Layer-1 high-level building description emitted by the LLM from an image + text. A deterministic generator (spec_to_param.py) expands it into a valid stand_trans param.json. Coordinates are a top-down site plan in metres: X=east, Y=north.",
+  "type": "object",
+  "required": ["buildings"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "scene name / slug" },
+        "style": { "type": "string", "enum": ["persian", "modern", "classical", "islamic"], "default": "modern" },
+        "description": { "type": "string", "description": "one-line human summary" }
+      }
+    },
+    "site": {
+      "type": "object",
+      "description": "Overall plot. Buildings should sit inside [0,0]..[width_m,depth_m].",
+      "additionalProperties": false,
+      "properties": {
+        "width_m": { "type": "number", "exclusiveMinimum": 0 },
+        "depth_m": { "type": "number", "exclusiveMinimum": 0 },
+        "ground": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "surface": { "type": "string", "enum": ["sand", "grass", "concrete", "none"], "default": "sand" },
+            "material": { "type": "string" },
+            "thickness_m": { "type": "number", "default": 0.5 }
+          }
+        },
+        "perimeter_wall": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "height_m": { "type": "number", "default": 5.0 },
+            "thickness_m": { "type": "number", "default": 1.0 },
+            "material": { "type": "string", "default": "stone_masonry" },
+            "corner_towers": { "type": "boolean", "default": true },
+            "tower_size_m": { "type": "number", "default": 6.0 }
+          }
+        }
+      }
+    },
+    "buildings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["footprint"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "footprint": {
+            "type": "array",
+            "description": "rectangle [x0, y0, x1, y1] in metres, x1>x0 and y1>y0",
+            "items": { "type": "number" },
+            "minItems": 4, "maxItems": 4
+          },
+          "floors": { "type": "integer", "minimum": 1, "default": 1 },
+          "floor_height_m": { "type": "number", "default": 3.5 },
+          "wall_thickness_m": { "type": "number", "default": 0.4 },
+          "material": {
+            "type": "string",
+            "enum": ["reinforced_concrete", "stone_masonry", "brick_masonry", "steel", "timber"],
+            "default": "reinforced_concrete"
+          },
+          "roof": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "enum": ["flat", "gable", "hip", "pyramidal"], "default": "flat" }
+            }
+          },
+          "columns_spacing_m": { "type": "number", "default": 0, "description": "0 = no interior column grid" },
+          "windows": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "shape": { "type": "string", "enum": ["rect", "pointed_arch", "horseshoe_arch", "round_arch"], "default": "rect" },
+              "width_m": { "type": "number", "default": 1.4 },
+              "height_m": { "type": "number", "default": 1.6 },
+              "sill_m": { "type": "number", "default": 0.9 },
+              "per_facade": {
+                "type": "object",
+                "description": "how many windows on each side; the generator distributes them evenly",
+                "additionalProperties": false,
+                "properties": {
+                  "south": { "type": "integer", "minimum": 0 },
+                  "north": { "type": "integer", "minimum": 0 },
+                  "east": { "type": "integer", "minimum": 0 },
+                  "west": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          },
+          "entrance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "facade": { "type": "string", "enum": ["south", "north", "east", "west"], "default": "south" },
+              "type": { "type": "string", "enum": ["door", "iwan"], "default": "door" },
+              "shape": { "type": "string", "enum": ["rect", "pointed_arch", "horseshoe_arch", "round_arch"], "default": "rect" },
+              "width_m": { "type": "number" },
+              "height_m": { "type": "number" }
+            }
+          },
+          "dome": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "radius_m": { "type": "number" },
+              "height_m": { "type": "number" },
+              "shape": { "type": "string", "enum": ["onion", "hemisphere", "tent"], "default": "onion" }
+            }
+          },
+          "basement": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "floors": { "type": "integer", "minimum": 0 },
+              "floor_height_m": { "type": "number" },
+              "footprint": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 }
+            }
+          }
+        }
+      }
+    },
+    "domes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["center", "radius_m"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "level": { "type": "string", "default": "G" },
+          "center": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+          "radius_m": { "type": "number" },
+          "height_m": { "type": "number", "default": 4.0 },
+          "shape": { "type": "string", "enum": ["onion", "hemisphere", "tent"], "default": "hemisphere" },
+          "base_height_m": { "type": "number", "default": 0 }
+        }
+      }
+    },
+    "pools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["footprint"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "footprint": { "type": "array", "description": "[x0,y0,x1,y1] or a polygon [[x,y],...]" },
+          "depth_m": { "type": "number", "default": 0.4 }
+        }
+      }
+    },
+    "gardens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["footprint"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "footprint": { "type": "array" }
+        }
+      }
+    },
+    "vegetation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["positions"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["palm", "cypress", "tree"], "default": "palm" },
+          "height_m": { "type": "number" },
+          "canopy_radius_m": { "type": "number" },
+          "positions": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+          }
+        }
+      }
+    },
+    "vehicles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["center"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string", "enum": ["car", "truck", "tank", "equipment"], "default": "car" },
+          "center": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+          "heading_deg": { "type": "number", "default": 0 },
+          "length_m": { "type": "number" },
+          "width_m": { "type": "number" },
+          "height_m": { "type": "number" }
+        }
+      }
+    }
+  }
+}

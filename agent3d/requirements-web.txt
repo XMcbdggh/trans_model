@@ -1,0 +1,5 @@
+# agent3d web app extras (on top of the repo's requirements.txt)
+fastapi
+uvicorn[standard]
+python-multipart          # multipart/form-data (file uploads) for FastAPI
+anthropic                 # server-side vision: image -> Building Spec

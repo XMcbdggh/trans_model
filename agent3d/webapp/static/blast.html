@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>爆炸仿真 · 选择模型</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0f1216; --panel:#12161c; --card:#151a21; --line:#232830; --line2:#2a303a;
+    --text:#e6e8eb; --muted:#8a919c; --accent:#3a7afe; --fire:#ff7a59; --fire2:#e5482a; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;overflow:hidden;font-family:system-ui,"Segoe UI",sans-serif;
+    background:var(--bg);color:var(--text)}
+
+  header{height:56px;padding:0 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  header h1{font-size:16px;margin:0}
+  header .sub{color:var(--muted);font-size:12.5px}
+  header a.home{margin-left:auto;text-decoration:none;color:#cbd3db;font-size:13px;background:#232a34;
+    padding:7px 13px;border-radius:9px;transition:.15s}
+  header a.home:hover{background:#2b333f;color:#fff}
+
+  main{display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 57px)}
+
+  /* ---------- sidebar: historical model picker ---------- */
+  #side{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+  .side-h{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between}
+  .side-h b{font-size:13.5px}
+  .side-h button{background:#232a34;border:0;color:#aab7c9;font-size:12px;padding:5px 11px;border-radius:7px;
+    cursor:pointer;transition:.15s}
+  .side-h button:hover{background:#2b333f;color:#fff}
+  #search{margin:0 16px 8px;padding:8px 10px;background:#0f141a;border:1px solid var(--line2);border-radius:8px;
+    color:var(--text);font-size:13px;font-family:inherit}
+  #search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(58,122,254,.15)}
+  #count{margin:0 16px 6px;font-size:11px;color:var(--muted)}
+  #list{flex:1;overflow:auto;padding:2px 12px 16px}
+
+  .scene{border:1px solid var(--line);background:var(--card);border-radius:11px;padding:11px 12px;margin:8px 0;
+    cursor:pointer;transition:transform .14s,border-color .14s,box-shadow .14s}
+  .scene:hover{border-color:#39424d;transform:translateY(-1px)}
+  .scene.active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(58,122,254,.16)}
+  .scene .nm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .scene .meta{font-size:11.5px;color:var(--muted);margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 10px}
+  .scene .meta .novox{color:#c9a24a}
+  .scene .desc{font-size:11.5px;color:#7f8894;margin-top:6px;line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .empty{color:var(--muted);font-size:13px;padding:26px 16px;text-align:center;line-height:1.8}
+  .empty a{color:var(--accent);text-decoration:none}
+  .empty a:hover{text-decoration:underline}
+
+  /* ---------- stage: resolution toolbar + embedded viewer (blast mode) ---------- */
+  #stage{position:relative;display:flex;flex-direction:column;background:radial-gradient(120% 120% at 50% 0%,#1e1518,#12151a 70%)}
+  #tools{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);
+    background:#12161c;flex-wrap:wrap;min-height:52px}
+  #tools.hidden{display:none}
+  #tools .tlabel{font-size:12.5px;color:var(--muted)}
+  #tools select{background:#0f141a;border:1px solid var(--line2);border-radius:8px;color:var(--text);
+    padding:7px 9px;font-size:13px;font-family:inherit;cursor:pointer}
+  #tools select:focus{outline:none;border-color:var(--accent)}
+  #voxBtn{background:linear-gradient(180deg,var(--fire),var(--fire2));border:0;color:#fff;font-weight:600;
+    font-size:13px;padding:8px 15px;border-radius:9px;cursor:pointer;transition:transform .12s,opacity .2s;
+    box-shadow:0 6px 16px -8px rgba(229,72,42,.75)}
+  #voxBtn:hover:not(:disabled){transform:translateY(-1px)}
+  #voxBtn:disabled{opacity:.55;cursor:not-allowed}
+  #voxInfo{font-size:12.5px;color:var(--muted);margin-left:auto;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;max-width:46%}
+  #voxInfo.ok{color:var(--ok)} #voxInfo.err{color:#ff6b6b} #voxInfo.busy{color:#e2cb4e}
+
+  #stagewrap{position:relative;flex:1;min-height:0}
+  #stagewrap iframe{width:100%;height:100%;border:0;opacity:0;transition:opacity .5s}
+  #stagewrap iframe.show{opacity:1}
+  #hint{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;align-items:center;
+    justify-content:center;color:#6b7280;font-size:14px;pointer-events:none;text-align:center;padding:20px}
+  #hint .ico{font-size:46px;animation:float 3.4s ease-in-out infinite}
+  #hint.gone{display:none}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>💥 爆炸仿真</h1>
+  <span class="sub">选建筑 → 选体素分辨率 → 生成体素 → 打击</span>
+  <a class="home" href="/">← 建模首页</a>
+</header>
+<main>
+  <aside id="side">
+    <div class="side-h"><b>历史模型</b><button id="refresh" title="重新加载列表">刷新</button></div>
+    <input id="search" placeholder="搜索名称 / ID …">
+    <div id="count"></div>
+    <div id="list"><div class="empty">加载中 …</div></div>
+  </aside>
+  <section id="stage">
+    <div id="tools" class="hidden">
+      <span class="tlabel">体素精细度</span>
+      <select id="res" title="分辨率越低方块越少、打击越流畅；导弹的真实毁伤尺寸不随分辨率改变"></select>
+      <button id="voxBtn">⚙️ 按此分辨率生成体素</button>
+      <span id="voxInfo"></span>
+    </div>
+    <div id="stagewrap">
+      <iframe id="viewer" title="爆炸查看器" allow="fullscreen" hidden></iframe>
+      <div id="hint"><span class="ico">🎯</span><span id="hintmsg">从左侧选择一个模型开始</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const listEl = document.getElementById('list');
+const viewer = document.getElementById('viewer');
+const hint   = document.getElementById('hint');
+const hintMsg= document.getElementById('hintmsg');
+const search = document.getElementById('search');
+const countEl= document.getElementById('count');
+const tools  = document.getElementById('tools');
+const resEl  = document.getElementById('res');
+const voxBtn = document.getElementById('voxBtn');
+const infoEl = document.getElementById('voxInfo');
+let scenes = [], activeId = null, activeScene = null, busy = false;
+
+// resolution tiers (blocks per metre). Lower = fewer blocks, faster/coarser blast.
+const RES = [
+  { v: 4,    lab: '精细 · 4/米' },
+  { v: 3,    lab: '标准 · 3/米' },
+  { v: 2,    lab: '精简 · 2/米' },
+  { v: 1.5,  lab: '极简 · 1.5/米' },
+  { v: 1,    lab: '超简 · 1/米' },
+  { v: 0.5,  lab: '巨型 · 0.5/米（航母/大船）' },
+  { v: 0.25, lab: '超巨 · 0.25/米' },
+];
+resEl.innerHTML = RES.map(r => `<option value="${r.v}">${r.lab}</option>`).join('');
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtCount = n => (n == null ? '—' : Number(n).toLocaleString());
+function fmtTime(ts){
+  if (!ts) return '';
+  const d = new Date(ts * 1000), p = x => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function setInfo(t, cls){ infoEl.textContent = t || ''; infoEl.className = cls || ''; }
+
+// estimated block count at bpm b, scaled from the scene's actual (count, bpm) by a
+// ~power-2.5 law (empirically ±10%); null until the scene has been voxelized once.
+function estCount(b){
+  const c = activeScene && activeScene.voxel_count, ab = activeScene && activeScene.blocks_per_meter;
+  if (!c || !ab) return null;
+  return Math.round(c * Math.pow(b / ab, 2.5));
+}
+function refreshResLabels(){
+  const c = activeScene && activeScene.voxel_count, ab = activeScene && activeScene.blocks_per_meter;
+  for (const opt of resEl.options){
+    const b = parseFloat(opt.value), base = (RES.find(r => r.v === b) || {}).lab || opt.value;
+    let suf = '';
+    if (c && ab) suf = (b === ab) ? ` · ${fmtCount(c)}` : ` · ≈${fmtCount(estCount(b))}`;
+    opt.textContent = base + suf;
+  }
+}
+
+async function pollJob(jobId, onStage){
+  let fails = 0;
+  while (true){
+    await new Promise(r => setTimeout(r, 900));
+    let s;
+    try { s = await (await fetch('/api/jobs/' + jobId)).json(); fails = 0; }
+    catch(_){ if (++fails > 20) throw new Error('与服务器失联'); continue; }
+    if (s.stage && onStage) onStage(s.stage);
+    if (s.done){ if (s.error) throw new Error(s.error); return s.result; }
+  }
+}
+
+async function load(){
+  listEl.innerHTML = '<div class="empty">加载中 …</div>';
+  try{
+    const r = await fetch('/api/scenes');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    scenes = (await r.json()).scenes || [];
+    render();
+    // deep-link support: /blast.html?scene=<id> preselects that model
+    const want = new URLSearchParams(location.search).get('scene');
+    if (want && !activeId && scenes.some(s => s.id === want)) pick(want);
+  }catch(e){
+    listEl.innerHTML = '<div class="empty">加载失败：' + esc(e.message || e) + '</div>';
+  }
+}
+
+function render(){
+  const kw = search.value.trim().toLowerCase();
+  const rows = scenes.filter(s => !kw ||
+    (s.name || '').toLowerCase().includes(kw) || s.id.toLowerCase().includes(kw));
+  countEl.textContent = scenes.length ? `共 ${scenes.length} 个模型` : '';
+  if (!rows.length){
+    listEl.innerHTML = scenes.length
+      ? '<div class="empty">没有匹配的模型</div>'
+      : '<div class="empty">还没有生成的模型。<br><a href="/">去首页生成一个 →</a></div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const s of rows){
+    const el = document.createElement('div');
+    el.className = 'scene' + (s.id === activeId ? ' active' : '');
+    const vox = s.has_voxels
+      ? `<span>🧱 ${fmtCount(s.voxel_count)} 块${s.blocks_per_meter ? ' · ' + s.blocks_per_meter + '/米' : ''}</span>`
+      : `<span class="novox">⚪ 未生成体素</span>`;
+    el.innerHTML =
+      `<div class="nm">${esc(s.name || s.id)}</div>` +
+      `<div class="meta">${vox}<span>${fmtTime(s.mtime)}</span></div>` +
+      (s.description ? `<div class="desc">${esc(s.description)}</div>` : '');
+    el.onclick = () => pick(s.id);
+    listEl.appendChild(el);
+  }
+}
+
+function loadViewer(id){
+  hint.classList.add('gone');
+  viewer.hidden = false;
+  viewer.classList.remove('show');
+  viewer.onload = () => viewer.classList.add('show');
+  // cache-bust so a just-regenerated voxels.json is re-fetched (server also sends no-store)
+  viewer.src = `/viewer.html?scene=${encodeURIComponent(id)}&blast=1&t=${Date.now()}`;
+}
+
+function pick(id){
+  activeId = id;
+  activeScene = scenes.find(s => s.id === id) || null;
+  render();                       // refresh active highlight + card counts
+  tools.classList.remove('hidden');
+  const cur = activeScene && activeScene.blocks_per_meter;
+  resEl.value = (cur && RES.some(r => r.v === cur)) ? String(cur) : '2';
+  refreshResLabels();
+  if (activeScene && activeScene.has_voxels){
+    loadViewer(id);
+    setInfo(`当前 ${fmtCount(activeScene.voxel_count)} 块`);
+  } else {
+    viewer.hidden = true; viewer.classList.remove('show');
+    hint.classList.remove('gone');
+    hintMsg.textContent = '选择分辨率后点「生成体素」开始打击';
+    setInfo('尚未生成体素', 'busy');
+  }
+}
+
+resEl.onchange = () => {
+  if (busy) return;
+  const b = parseFloat(resEl.value), ab = activeScene && activeScene.blocks_per_meter;
+  if (activeScene && activeScene.voxel_count)
+    setInfo(b === ab ? `当前 ${fmtCount(activeScene.voxel_count)} 块`
+                     : `预计 ≈${fmtCount(estCount(b))} 块 · 点按钮生成`);
+};
+
+voxBtn.onclick = async () => {
+  if (!activeScene || busy) return;
+  busy = true; voxBtn.disabled = true; resEl.disabled = true;
+  const bpm = resEl.value;
+  setInfo('体素化中 … 排队中', 'busy');
+  try{
+    const fd = new FormData();
+    fd.append('scene_id', activeScene.id); fd.append('bpm', bpm);
+    const start = await (await fetch('/api/voxelize', { method: 'POST', body: fd })).json();
+    if (start.error) throw new Error(start.error);
+    const res = await pollJob(start.job_id, st => setInfo('体素化中 … ' + st, 'busy'));
+    activeScene.voxel_count = res.stats.voxel_count;
+    activeScene.blocks_per_meter = res.stats.blocks_per_meter;
+    activeScene.has_voxels = true;
+    refreshResLabels();
+    setInfo(`✓ 完成：${fmtCount(res.stats.voxel_count)} 块（${res.stats.blocks_per_meter}/米）`, 'ok');
+    loadViewer(activeScene.id);   // reload viewer with the new voxels
+    render();                     // update the sidebar card's block count
+  }catch(e){
+    setInfo('生成失败：' + (e.message || e), 'err');
+  }finally{
+    busy = false; voxBtn.disabled = false; resEl.disabled = false;
+  }
+};
+
+document.getElementById('refresh').onclick = load;
+search.addEventListener('input', render);
+load();
+</script>
+</body>
+</html>

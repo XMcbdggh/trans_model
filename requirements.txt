@@ -1,0 +1,7 @@
+ifcopenshell
+trimesh
+numpy
+Pillow
+scipy
+manifold3d
+litemapy

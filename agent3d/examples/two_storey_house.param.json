@@ -1,0 +1,544 @@
+{
+  "project": {
+    "name": "two_storey_house",
+    "unit": "m",
+    "style": "modern"
+  },
+  "style": {
+    "preset": "modern"
+  },
+  "auto_structure": false,
+  "auto_mep": false,
+  "levels": [
+    {
+      "name": "G",
+      "elevation_m": 0.0,
+      "height_m": 4.0
+    },
+    {
+      "name": "house_F1",
+      "elevation_m": 0.0,
+      "height_m": 3.2
+    },
+    {
+      "name": "house_F2",
+      "elevation_m": 3.2,
+      "height_m": 3.2
+    }
+  ],
+  "walls": [
+    {
+      "id": "house_house_F1_o_0",
+      "level": "house_F1",
+      "start": [
+        4,
+        4
+      ],
+      "end": [
+        16,
+        4
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F1_o_1",
+      "level": "house_F1",
+      "start": [
+        16,
+        4
+      ],
+      "end": [
+        16,
+        12
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F1_o_2",
+      "level": "house_F1",
+      "start": [
+        16,
+        12
+      ],
+      "end": [
+        4,
+        12
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F1_o_3",
+      "level": "house_F1",
+      "start": [
+        4,
+        12
+      ],
+      "end": [
+        4,
+        4
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F2_o_0",
+      "level": "house_F2",
+      "start": [
+        4,
+        4
+      ],
+      "end": [
+        16,
+        4
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F2_o_1",
+      "level": "house_F2",
+      "start": [
+        16,
+        4
+      ],
+      "end": [
+        16,
+        12
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F2_o_2",
+      "level": "house_F2",
+      "start": [
+        16,
+        12
+      ],
+      "end": [
+        4,
+        12
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F2_o_3",
+      "level": "house_F2",
+      "start": [
+        4,
+        12
+      ],
+      "end": [
+        4,
+        4
+      ],
+      "thickness_m": 0.4,
+      "category": "external",
+      "load_bearing": true,
+      "material": "brick_masonry"
+    }
+  ],
+  "columns": [],
+  "slabs": [
+    {
+      "id": "house_house_F1_slab",
+      "level": "house_F1",
+      "polygon": [
+        [
+          4,
+          4
+        ],
+        [
+          16,
+          4
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          4,
+          12
+        ]
+      ],
+      "thickness_m": 0.4,
+      "material": "brick_masonry"
+    },
+    {
+      "id": "house_house_F2_slab",
+      "level": "house_F2",
+      "polygon": [
+        [
+          4,
+          4
+        ],
+        [
+          16,
+          4
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          4,
+          12
+        ]
+      ],
+      "thickness_m": 0.4,
+      "material": "brick_masonry"
+    }
+  ],
+  "doors": [
+    {
+      "id": "house_entry",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_0",
+      "center": [
+        10.0,
+        4
+      ],
+      "width_m": 1.1,
+      "height_m": 2.1,
+      "sill_height_m": 0.0,
+      "shape": "rect"
+    }
+  ],
+  "windows": [
+    {
+      "id": "house_house_F1_south_w0",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_0",
+      "center": [
+        7.333,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_south_w1",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_0",
+      "center": [
+        10.0,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_south_w2",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_0",
+      "center": [
+        12.667,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_south_w0",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_0",
+      "center": [
+        7.333,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_south_w1",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_0",
+      "center": [
+        10.0,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_south_w2",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_0",
+      "center": [
+        12.667,
+        4
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_east_w0",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_1",
+      "center": [
+        16,
+        8.0
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_east_w0",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_1",
+      "center": [
+        16,
+        8.0
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_north_w0",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_2",
+      "center": [
+        7.333,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_north_w1",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_2",
+      "center": [
+        10.0,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_north_w2",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_2",
+      "center": [
+        12.667,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_north_w0",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_2",
+      "center": [
+        7.333,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_north_w1",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_2",
+      "center": [
+        10.0,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_north_w2",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_2",
+      "center": [
+        12.667,
+        12
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F1_west_w0",
+      "level": "house_F1",
+      "host_id": "house_house_F1_o_3",
+      "center": [
+        4,
+        8.0
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    },
+    {
+      "id": "house_house_F2_west_w0",
+      "level": "house_F2",
+      "host_id": "house_house_F2_o_3",
+      "center": [
+        4,
+        8.0
+      ],
+      "width_m": 1.2,
+      "height_m": 1.4,
+      "sill_height_m": 0.9,
+      "shape": "rect"
+    }
+  ],
+  "roofs": [
+    {
+      "id": "house_roof",
+      "level": "house_F2",
+      "type": "gable",
+      "polygon": [
+        [
+          4,
+          4
+        ],
+        [
+          16,
+          4
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          4,
+          12
+        ]
+      ],
+      "thickness_m": 0.4,
+      "ridge_start": [
+        4,
+        8.0
+      ],
+      "ridge_end": [
+        16,
+        8.0
+      ],
+      "eave_height_m": 6.4,
+      "ridge_height_m": 8.8
+    }
+  ],
+  "stairs": [],
+  "rooms": [],
+  "domes": [],
+  "iwans": [],
+  "pishtaqs": [],
+  "pools": [],
+  "gardens": [],
+  "canals": [],
+  "trees": [
+    {
+      "id": "veg0_0",
+      "level": "G",
+      "center": [
+        2,
+        2
+      ],
+      "species": "tree",
+      "height_m": 6.5,
+      "canopy_radius_m": 2.6,
+      "trunk_radius_m": 0.3
+    },
+    {
+      "id": "veg0_1",
+      "level": "G",
+      "center": [
+        18,
+        2
+      ],
+      "species": "tree",
+      "height_m": 6.5,
+      "canopy_radius_m": 2.6,
+      "trunk_radius_m": 0.3
+    },
+    {
+      "id": "veg0_2",
+      "level": "G",
+      "center": [
+        2,
+        14
+      ],
+      "species": "tree",
+      "height_m": 6.5,
+      "canopy_radius_m": 2.6,
+      "trunk_radius_m": 0.3
+    },
+    {
+      "id": "veg0_3",
+      "level": "G",
+      "center": [
+        18,
+        14
+      ],
+      "species": "tree",
+      "height_m": 6.5,
+      "canopy_radius_m": 2.6,
+      "trunk_radius_m": 0.3
+    }
+  ],
+  "vehicles": [],
+  "terrain": [
+    {
+      "id": "site_ground",
+      "level": "G",
+      "bbox": [
+        0.0,
+        0.0,
+        20.0,
+        16.0
+      ],
+      "surface": "grass",
+      "thickness_m": 0.5
+    }
+  ]
+}

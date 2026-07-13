@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图片 → 3D 建筑模型</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0f1216; --panel:#12161c; --card:#151a21; --line:#232830; --line2:#2a303a;
+    --text:#e6e8eb; --muted:#8a919c; --accent:#3a7afe; --accent2:#5b93ff; --ok:#34d399; --err:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+  header{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px}
+  header h1{font-size:17px;margin:0}
+  header span{color:var(--muted);font-size:13px}
+  header .nav-set{margin-left:auto;align-self:center;background:#232a34;border:1px solid var(--line2);
+    color:#dbe3ee;font-size:13px;font-weight:600;padding:7px 13px;border-radius:9px;cursor:pointer;
+    transition:.15s}
+  header .nav-set:hover{background:#2b333f;color:#fff}
+  header .nav-set.warn{border-color:#e5a13a;color:#ffcf87;background:#2a2415;
+    animation:setpulse 2s ease-in-out infinite}
+  @keyframes setpulse{0%,100%{box-shadow:0 0 0 0 rgba(229,161,58,0)}50%{box-shadow:0 0 0 5px rgba(229,161,58,.18)}}
+  header .nav-blast{align-self:center;text-decoration:none;font-size:13px;font-weight:600;
+    color:#fff;background:linear-gradient(180deg,#ff7a59,#e5482a);padding:8px 15px;border-radius:9px;
+    box-shadow:0 6px 18px -8px rgba(229,72,42,.75);transition:transform .12s,box-shadow .2s}
+  header .nav-blast:hover{transform:translateY(-1px);box-shadow:0 8px 22px -8px rgba(229,72,42,.9)}
+  main{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 58px)}
+  #panel{padding:20px 20px 40px;border-right:1px solid var(--line);overflow:auto}
+
+  /* ---------- stepper ---------- */
+  .stepper{--prog:0%;list-style:none;display:flex;justify-content:space-between;position:relative;
+    margin:4px 6px 22px;padding:0}
+  .stepper::before,.stepper::after{content:"";position:absolute;top:15px;left:16px;right:16px;height:3px;
+    border-radius:3px}
+  .stepper::before{background:var(--line2)}
+  .stepper::after{background:linear-gradient(90deg,var(--accent),var(--accent2));
+    width:calc((100% - 32px) * (var(--prog)/100));transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .stepper li{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:7px;
+    flex:1}
+  .dot{width:32px;height:32px;border-radius:50%;background:#1c222b;border:2px solid var(--line2);
+    display:grid;place-items:center;position:relative;transition:.35s;color:var(--muted);font-size:14px;
+    font-weight:700}
+  .dot .num,.dot .chk{grid-area:1/1;transition:.3s;transform-origin:center}
+  .dot .chk{opacity:0;transform:scale(.3);color:#0b0e12;font-size:15px}
+  .stepper li .lbl{font-size:12px;color:var(--muted);transition:.3s}
+  .stepper li.active .dot{border-color:var(--accent);color:#fff;background:#1a2740;
+    box-shadow:0 0 0 5px rgba(58,122,254,.14)}
+  .stepper li.active .lbl{color:var(--text)}
+  .stepper li.done .dot{border-color:var(--ok);background:var(--ok)}
+  .stepper li.done .dot .num{opacity:0;transform:scale(.3)}
+  .stepper li.done .dot .chk{opacity:1;transform:scale(1)}
+  .stepper li.done .lbl{color:var(--ok)}
+  .stepper li.locked{opacity:.5}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;
+    opacity:0;transform:translateY(10px);animation:cardin .5s ease forwards;transition:opacity .4s,filter .4s}
+  .card:nth-child(3){animation-delay:.05s}.card:nth-child(4){animation-delay:.12s}.card:nth-child(5){animation-delay:.19s}
+  @keyframes cardin{to{opacity:1;transform:none}}
+  .card.locked{opacity:.42;filter:saturate(.5)}
+  .card.locked > *:not(.card-h){pointer-events:none}
+  .card-h{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;margin-bottom:12px}
+  .card-h b{width:22px;height:22px;border-radius:50%;background:#20283a;color:var(--accent2);
+    display:grid;place-items:center;font-size:12px}
+  .hint{font-size:12px;color:var(--muted);margin:-4px 0 12px;line-height:1.5}
+
+  label{display:block;font-size:12.5px;color:#aab1bc;margin:12px 0 6px}
+  textarea,select{width:100%;background:#0f141a;border:1px solid var(--line2);border-radius:9px;
+    color:var(--text);padding:10px;font-size:14px;font-family:inherit;transition:border-color .2s,box-shadow .2s}
+  textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(58,122,254,.15)}
+  textarea{min-height:80px;resize:vertical;line-height:1.5}
+  #features{min-height:150px}
+
+  /* ---------- upload ---------- */
+  #drop{border:2px dashed #333b46;border-radius:12px;padding:26px 14px;text-align:center;color:var(--muted);
+    cursor:pointer;font-size:13px;transition:.25s;position:relative}
+  #drop .big{font-size:26px;display:block;margin-bottom:8px;transition:transform .25s}
+  #drop:hover{border-color:#48546a;color:#c7d2fe}#drop:hover .big{transform:translateY(-2px) scale(1.06)}
+  #drop.hot{border-color:var(--accent);background:rgba(58,122,254,.08);color:#c7d2fe}
+  #drop.breathe{animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{border-color:#333b46}50%{border-color:var(--accent);box-shadow:0 0 0 4px rgba(58,122,254,.08)}}
+  #thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  #thumbs img{width:64px;height:64px;object-fit:cover;border-radius:9px;border:1px solid var(--line2);
+    animation:pop .3s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* ---------- buttons ---------- */
+  .btn{position:relative;width:100%;margin-top:14px;padding:12px;border:0;border-radius:10px;
+    font-size:14.5px;font-weight:600;cursor:pointer;transition:transform .12s,box-shadow .2s,background .2s;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .btn:hover{transform:translateY(-1px)}.btn:active{transform:translateY(0)}
+  .btn:disabled{cursor:not-allowed;transform:none}
+  .btn.primary{background:linear-gradient(180deg,var(--accent2),var(--accent));color:#fff;
+    box-shadow:0 6px 18px -8px rgba(58,122,254,.7)}
+  .btn.ghost{background:#232a34;color:#dbe3ee}.btn.ghost:hover{background:#2b333f}
+  .btn:disabled{background:#20242a;color:#5b626c;box-shadow:none}
+  .btn.cta{animation:cta 1.8s ease-in-out infinite}
+  @keyframes cta{0%,100%{box-shadow:0 0 0 0 rgba(58,122,254,0)}50%{box-shadow:0 0 0 6px rgba(58,122,254,.20)}}
+  .btn .spin{position:absolute;width:18px;height:18px;border:2.5px solid rgba(255,255,255,.35);
+    border-top-color:#fff;border-radius:50%;opacity:0;animation:spin .7s linear infinite}
+  .btn.loading .label{opacity:0}.btn.loading .spin{opacity:1}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .status{font-size:12.5px;color:var(--muted);min-height:0;margin-top:0;white-space:pre-wrap;line-height:1.5;
+    max-height:0;opacity:0;overflow:hidden;transition:max-height .3s,opacity .3s,margin-top .3s}
+  .status.show{max-height:80px;opacity:1;margin-top:10px}
+  .status.err{color:var(--err)}
+
+  /* model-in-use badge (confirms which model each call actually hit) */
+  .modelrow{font-size:12px;color:#9fb3d1;margin-top:9px;display:none;align-items:center;gap:6px;flex-wrap:wrap}
+  .modelrow.show{display:flex;animation:fadein .3s ease}
+  .modelrow code{background:#0d1116;border:1px solid var(--line2);border-radius:6px;padding:2px 8px;
+    color:#c7d2fe;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .modelrow .mnote{color:var(--muted)}
+  .modelrow.live code{border-color:var(--accent);box-shadow:0 0 0 3px rgba(58,122,254,.12)}
+
+  /* ---------- reveal ---------- */
+  .reveal{max-height:0;opacity:0;overflow:hidden;transition:max-height .45s ease,opacity .4s ease}
+  .reveal.show{max-height:420px;opacity:1}
+
+  details.adv{margin-top:4px}
+  details.adv summary{cursor:pointer;color:var(--muted);font-size:12.5px;list-style:none}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::before{content:"⚙ ";}
+  #specbox{margin-top:8px}
+  #specbox summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+  pre{background:#0d1116;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:12px;
+    overflow:auto;max-height:260px;margin-top:8px}
+
+  /* ---------- stage ---------- */
+  #stage{position:relative;background:radial-gradient(120% 120% at 50% 0%,#1a2030,#12151a 70%)}
+  #stage iframe{width:100%;height:100%;border:0;opacity:0;transition:opacity .6s}
+  #stage iframe.show{opacity:1}
+  #empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;
+    justify-content:center;color:#4b5563;font-size:14px;transition:opacity .5s}
+  #empty .em-ico{font-size:40px;opacity:.5;animation:float 3.5s ease-in-out infinite}
+  #empty.gone{opacity:0;pointer-events:none}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+  /* ---------- live progress ---------- */
+  .prog{display:none;margin-top:10px}
+  .prog.show{display:block;animation:fadein .3s ease}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  .prog .bar{height:5px;border-radius:5px;background:#1c222b;overflow:hidden;position:relative}
+  .prog .bar i{position:absolute;top:0;bottom:0;left:-40%;width:40%;border-radius:5px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:slide 1.3s ease-in-out infinite}
+  @keyframes slide{0%{left:-40%}100%{left:110%}}
+  .prog .prow{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:12px;color:var(--muted)}
+  .prog .ptime{font-variant-numeric:tabular-nums;color:#aab1bc}
+  .prog .phint.f{animation:hintf .4s ease}
+  @keyframes hintf{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+  #empty.working .em-ico{animation:spin 1.4s linear infinite}
+
+  /* ---------- floating editor modal ---------- */
+  .mini{float:right;background:#232a34;border:0;color:#aab7c9;font-size:11.5px;padding:3px 9px;
+    border-radius:6px;cursor:pointer;transition:.15s}
+  .mini:hover{background:#2b333f;color:#fff}
+  .modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;
+    background:rgba(6,9,13,.62);backdrop-filter:blur(3px);animation:fadein .2s ease}
+  .modal[hidden]{display:none}
+  .modal-box{width:min(780px,90vw);height:min(72vh,660px);background:var(--card);
+    border:1px solid var(--line2);border-radius:16px;display:flex;flex-direction:column;
+    box-shadow:0 30px 90px -20px rgba(0,0,0,.75);overflow:hidden;
+    animation:pop .28s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes pop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+    border-bottom:1px solid var(--line);font-weight:600}
+  .modal-h .x{background:none;border:0;color:var(--muted);font-size:17px;cursor:pointer;
+    padding:4px 9px;border-radius:8px}
+  .modal-h .x:hover{background:#20262e;color:#fff}
+  #modalText{flex:1;border:0;border-radius:0;background:#0d1116;padding:16px 18px;font-size:15px;
+    line-height:1.65;resize:none;color:var(--text);font-family:inherit}
+  #modalText:focus{outline:none}
+  .modal-f{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;
+    border-top:1px solid var(--line)}
+  .modal-f .modal-tip{font-size:12px;color:var(--muted)}
+  .modal-f .btn{margin-top:0;width:auto;padding:9px 24px}
+
+  /* ---------- settings modal (⚙️ model / key / url) ---------- */
+  .set-box{width:min(520px,92vw);height:auto;max-height:88vh}
+  .set-body{padding:8px 18px 4px;overflow:auto}
+  .set-body label{margin-top:14px}
+  .set-body input[type=text],.set-body input[type=password]{width:100%;background:#0f141a;
+    border:1px solid var(--line2);border-radius:9px;color:var(--text);padding:10px;font-size:14px;
+    font-family:inherit;transition:border-color .2s,box-shadow .2s}
+  .set-body input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(58,122,254,.15)}
+  .set-note{font-size:12.5px;color:var(--muted);line-height:1.6;margin:12px 0 2px}
+  .set-note strong{color:#c7d2fe;font-weight:600}
+  .set-key{display:flex;gap:8px;align-items:stretch}
+  .set-key input{flex:1}
+  .set-key .mini{float:none;align-self:center;padding:7px 12px}
+  .set-keyhint{font-size:12px;color:var(--muted);margin-top:7px;min-height:15px;line-height:1.5}
+  .set-f{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;
+    border-top:1px solid var(--line)}
+  .set-f .btn{margin-top:0;width:auto;padding:9px 18px}
+  .set-f .right{display:flex;gap:10px}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>图片 → 3D 建筑模型</h1>
+  <span>上传照片 → AI 读图写描述（可改）→ 一键生成可交互 3D</span>
+  <button class="nav-set" id="openSettings" title="配置模型 / API Key / 接口地址">⚙️ 模型设置</button>
+  <a class="nav-blast" href="/blast.html">💥 爆炸仿真</a>
+</header>
+<main>
+  <section id="panel">
+    <ol class="stepper" id="stepper">
+      <li data-step="1" class="active"><span class="dot"><i class="num">1</i><i class="chk">✓</i></span><span class="lbl">上传图片</span></li>
+      <li data-step="2" class="locked"><span class="dot"><i class="num">2</i><i class="chk">✓</i></span><span class="lbl">生成描述</span></li>
+      <li data-step="3" class="locked"><span class="dot"><i class="num">3</i><i class="chk">✓</i></span><span class="lbl">生成模型</span></li>
+    </ol>
+
+    <!-- Step 1 -->
+    <div class="card" id="card-upload">
+      <div class="card-h"><b>1</b> 上传建筑图片</div>
+      <div id="drop"><span class="big">🖼️</span>点击或拖拽图片到此处<br><span style="font-size:12px;opacity:.8">照片 / 平面图 / 立面图，可多张</span></div>
+      <input id="file" type="file" accept="image/*" multiple hidden>
+      <div id="thumbs"></div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="card locked" id="card-desc">
+      <div class="card-h"><b>2</b> 生成并编辑特征描述</div>
+      <div class="hint">AI 先把图里的建筑用文字讲清楚。你可以修改这段描述——改了什么，生成的模型就跟着变。</div>
+      <label>补充说明（可选，给 AI 的提示）</label>
+      <textarea id="desc" placeholder="例：沙漠中的波斯宫殿围院；请忽略棕榈树和车辆。"></textarea>
+      <button class="btn ghost" id="step1"><span class="label">✨ 让 AI 读图，生成描述</span><span class="spin"></span></button>
+      <div id="status1" class="status"></div>
+      <div class="modelrow" id="model1"></div>
+      <div class="prog" id="prog1"><div class="bar"><i></i></div>
+        <div class="prow"><span class="ptime">0:00</span><span class="phint"></span></div></div>
+      <div class="reveal" id="featureWrap">
+        <label>✏️ 特征描述（可自由编辑）<button type="button" class="mini" id="expand">⤢ 放大编辑</button></label>
+        <textarea id="features" placeholder="点上方按钮自动填充；也可直接在这里编辑或粘贴你自己的描述。"></textarea>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="card locked" id="card-gen">
+      <div class="card-h"><b>3</b> 生成 3D 模型</div>
+      <div class="hint">把图片和上面的描述一起交给模型，自动生成建筑 JSON → 3D 模型（GLB）。体素在「💥 爆炸仿真」页按所选分辨率生成。</div>
+      <details class="adv">
+        <summary>高级：生成方式</summary>
+        <label>生成方式</label>
+        <select id="mode">
+          <option value="param">直出 param.json（细节多，含穹顶/iwan 等）</option>
+          <option value="spec">两层 Building Spec（最稳，细节少）</option>
+        </select>
+      </details>
+      <button class="btn primary" id="go"><span class="label">🏛️ 生成 3D 模型</span><span class="spin"></span></button>
+      <div id="status" class="status"></div>
+      <div class="modelrow" id="model2"></div>
+      <div class="prog" id="prog2"><div class="bar"><i></i></div>
+        <div class="prow"><span class="ptime">0:00</span><span class="phint"></span></div></div>
+      <a id="toblast" class="btn primary" style="text-decoration:none" href="#" hidden>💥 去爆炸页 · 生成体素并打击</a>
+    </div>
+
+    <details id="specbox" hidden>
+      <summary>查看生成的建筑 JSON</summary>
+      <pre id="spec"></pre>
+    </details>
+  </section>
+
+  <section id="stage">
+    <div id="empty"><span class="em-ico">🏗️</span><span>完成后，3D 模型会显示在这里</span></div>
+    <iframe id="viewer" hidden></iframe>
+  </section>
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-h"><span>✏️ 编辑特征描述</span><button class="x" id="modalClose">✕</button></div>
+    <textarea id="modalText" placeholder="在这里更舒适地编辑特征描述 …"></textarea>
+    <div class="modal-f"><span class="modal-tip">编辑会自动同步 · Esc 或点空白处关闭</span>
+      <button class="btn primary" id="modalDone">完成</button></div>
+  </div>
+</div>
+
+<div id="setModal" class="modal" hidden>
+  <div class="modal-box set-box">
+    <div class="modal-h"><span>⚙️ 模型设置</span><button class="x" id="setClose">✕</button></div>
+    <div class="set-body">
+      <p class="set-note">配置读图智能体的<strong>模型名</strong>、<strong>API Key</strong> 与<strong>接口地址（Base URL）</strong>。保存后对「生成描述」「生成模型」都生效；留空的项使用 .env / 默认值。</p>
+      <label>模型名</label>
+      <input id="setModel" type="text" placeholder="claude-sonnet-5" autocomplete="off" spellcheck="false">
+      <label>Base URL（接口地址，可选）</label>
+      <input id="setBase" type="text" placeholder="如 https://openrouter.ai/api/v1，留空用默认" autocomplete="off" spellcheck="false">
+      <label>API Key</label>
+      <div class="set-key">
+        <input id="setKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+        <button type="button" class="mini" id="setKeyShow">显示</button>
+      </div>
+      <div class="set-keyhint" id="setKeyHint"></div>
+      <details class="adv"><summary>高级：描述阶段单独用的模型</summary>
+        <label>描述模型（留空＝与主模型相同）</label>
+        <input id="setDescModel" type="text" placeholder="留空＝与主模型相同" autocomplete="off" spellcheck="false">
+      </details>
+      <div id="setStatus" class="status"></div>
+    </div>
+    <div class="set-f">
+      <button type="button" class="btn ghost" id="setTest">🔌 测试连接</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="setClear">清除密钥</button>
+        <button type="button" class="btn primary" id="setSave">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const q = id => document.getElementById(id);
+const files = [];
+let generated = false, busy = false;
+
+const drop=q('drop'), fileInput=q('file'), thumbs=q('thumbs'),
+      step1=q('step1'), go=q('go'), viewer=q('viewer'), empty=q('empty'), featuresEl=q('features');
+
+drop.onclick=()=>fileInput.click();
+fileInput.onchange=()=>addFiles(fileInput.files);
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
+drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+
+function addFiles(list){
+  let n=0;
+  for(const f of list) if(f.type.startsWith('image/')){
+    files.push(f);
+    const img=document.createElement('img'); img.src=URL.createObjectURL(f); thumbs.appendChild(img); n++;
+  }
+  if(n) refreshUI();
+}
+featuresEl.addEventListener('input', refreshUI);
+
+// ---- live progress (elapsed time + REAL stage text from the server) ----
+const EMPTY_HTML=empty.innerHTML;
+function fmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+function makeProgress(id){
+  const box=q(id),tEl=box.querySelector('.ptime'),hEl=box.querySelector('.phint');
+  let t0,timer;
+  return {
+    start(hint){box.classList.add('show');t0=Date.now();this.hint(hint||'处理中 …');
+      timer=setInterval(()=>{tEl.textContent=fmt(Math.floor((Date.now()-t0)/1000));},500);},
+    hint(text){ if(!text||hEl.textContent===text) return; hEl.textContent=text;
+      hEl.classList.remove('f');void hEl.offsetWidth;hEl.classList.add('f'); },
+    stop(){box.classList.remove('show');clearInterval(timer);}
+  };
+}
+const prog1=makeProgress('prog1'), prog2=makeProgress('prog2');
+async function postForm(url,fd,ms){
+  const ctrl=new AbortController(); const id=setTimeout(()=>ctrl.abort(),ms);
+  try{ const r=await fetch(url,{method:'POST',body:fd,signal:ctrl.signal}); return await r.json(); }
+  finally{ clearTimeout(id); }
+}
+function errMsg(e){ return e.name==='AbortError' ? '超时：网络较慢或服务繁忙' : (e.message||e); }
+function stageWorking(on,stage){
+  if(on){ empty.classList.remove('gone'); empty.classList.add('working');
+    empty.innerHTML='<span class="em-ico">🏗️</span><span class="em-stage">'+(stage||'正在生成 …')+'</span>'; }
+  else{ empty.classList.remove('working'); if(!generated) empty.innerHTML=EMPTY_HTML; }
+}
+function setStageText(t){ const w=empty.querySelector('.em-stage'); if(w) w.textContent=t; }
+
+// Step ①: image -> editable feature description
+step1.onclick=async()=>{
+  if(!files.length){ setStatus1('请先上传至少一张图片', true); return; }
+  busy=true; setLoading(step1,true); refreshUI(); setStatus1(''); prog1.start('模型读图分析中 …（单次调用）');
+  showModel('model1', expectedDescribeModel(), '读图描述', true);
+  const fd=new FormData(); fd.append('description', q('desc').value||'');
+  for(const f of files) fd.append('images', f);
+  try{
+    const data=await postForm('/api/describe', fd, 180000);
+    if(data.error) throw new Error(data.error);
+    featuresEl.value=data.features||'';
+    showModel('model1', data.model||expectedDescribeModel(), '读图描述', false);
+    setStatus1('✓ 已生成描述（模型 '+(data.model||'—')+'）· 可在下面修改后再点第 3 步');
+  }catch(e){ setStatus1('生成描述失败：'+errMsg(e)+'（可直接点按钮重试）', true); }
+  finally{ prog1.stop(); busy=false; setLoading(step1,false); refreshUI(); }
+};
+
+// Step ②: image + (edited) description -> 3D model
+go.onclick=async()=>{
+  if(!files.length){ setStatus('请先上传至少一张图片', true); return; }
+  const desc=featuresEl.value.trim()||q('desc').value.trim();
+  const mode=q('mode').value;
+  busy=true; setLoading(go,true); refreshUI(); setStatus(''); prog2.start('正在提交任务 …'); stageWorking(true);
+  showModel('model2', expectedGenModel(), '读图建模', true);
+  const fd=new FormData(); fd.append('description', desc); fd.append('mode', mode);
+  for(const f of files) fd.append('images', f);
+  try{
+    const start=await postForm('/api/generate', fd, 60000);
+    if(start.error) throw new Error(start.error);
+    const data=await pollJob(start.job_id);   // resolves with the final result, or throws
+    generated=true;
+    showModel('model2', (data&&data.model)||expectedGenModel(), '读图建模', false);
+    setStatus('✓ 完成（模型 '+((data&&data.model)||'—')+'）· 前往「爆炸仿真」按分辨率生成体素并打击');
+    const tb=q('toblast'); if(tb){ tb.href='/blast.html?scene='+encodeURIComponent(data.scene_id); tb.hidden=false; }
+    try{
+      if(data.spec) q('spec').textContent=JSON.stringify(data.spec,null,2);
+      else q('spec').textContent=await (await fetch(data.urls.param)).text();
+      q('specbox').hidden=false;
+    }catch(_){}
+    empty.classList.add('gone'); viewer.hidden=false;
+    viewer.onload=()=>viewer.classList.add('show'); viewer.src=data.urls.viewer;
+  }catch(e){ setStatus('生成失败：'+errMsg(e)+'（可直接点按钮重试）', true); }
+  finally{ prog2.stop(); stageWorking(false); busy=false; setLoading(go,false); refreshUI(); }
+};
+
+// Poll the background job; surface its REAL current stage. Tolerates network blips —
+// the job keeps running server-side even if a poll drops, so flaky networks recover.
+async function pollJob(jobId){
+  let fails=0;
+  while(true){
+    await new Promise(r=>setTimeout(r,900));
+    let s;
+    try{ s=await (await fetch('/api/jobs/'+jobId)).json(); fails=0; }
+    catch(_){ if(++fails>20) throw new Error('与服务器失联'); continue; }
+    if(s.model) showModel('model2', s.model, '读图建模', true);   // server-confirmed model, live
+    if(s.stage){ prog2.hint(s.stage+' …'); setStageText(s.stage+' …'); }
+    if(s.done){ if(s.error) throw new Error(s.error); return s.result; }
+  }
+}
+
+function setLoading(btn,on){ btn.classList.toggle('loading',on); btn.disabled=on; }
+function setStatus(m,err){ const s=q('status'); s.textContent=m||''; s.className='status'+(err?' err':'')+(m?' show':''); }
+function setStatus1(m,err){ const s=q('status1'); s.textContent=m||''; s.className='status'+(err?' err':'')+(m?' show':''); }
+function setStep(n,cls){ const li=document.querySelector('.stepper li[data-step="'+n+'"]'); if(li) li.className=cls; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// Show which model a call actually used. live=true while the call is in flight (highlighted);
+// false once the server has confirmed the model it resolved from the current settings.
+function showModel(id,name,note,live){ const el=q(id); if(!el) return;
+  if(!name){ el.className='modelrow'; el.innerHTML=''; return; }
+  el.innerHTML=(live?'⏳ 正在调用模型 ':'🤖 已调用模型 ')+'<code>'+esc(name)+'</code>'
+              +(note?' <span class="mnote">'+esc(note)+'</span>':'');
+  el.className='modelrow show'+(live?' live':''); }
+const expectedDescribeModel=()=> curSettings ? (curSettings.describe_model||curSettings.model||'') : '';
+const expectedGenModel=()=> curSettings ? (curSettings.model||'') : '';
+
+function refreshUI(){
+  const hasImg=files.length>0, hasFeat=featuresEl.value.trim().length>0;
+  setStep(1, hasImg?'done':'active');
+  setStep(2, !hasImg?'locked':(hasFeat?'done':'active'));
+  setStep(3, !hasImg?'locked':(generated?'done':(hasFeat?'active':'')));
+  q('stepper').style.setProperty('--prog', (hasFeat?100:(hasImg?50:0))+'%');
+  q('card-desc').classList.toggle('locked', !hasImg);
+  q('card-gen').classList.toggle('locked', !hasImg);
+  q('featureWrap').classList.toggle('show', hasFeat);
+  step1.classList.toggle('cta', hasImg && !hasFeat && !busy);
+  go.classList.toggle('cta', hasImg && hasFeat && !busy);
+  drop.classList.toggle('breathe', !hasImg && !busy);
+}
+
+// ---- floating editor modal for the feature description ----
+const modal=q('modal'), modalText=q('modalText');
+function openModal(){ modalText.value=featuresEl.value; modal.hidden=false; modalText.focus(); }
+function closeModal(){ featuresEl.value=modalText.value; modal.hidden=true; refreshUI(); }
+q('expand').onclick=openModal;
+q('modalClose').onclick=closeModal;
+q('modalDone').onclick=closeModal;
+modalText.addEventListener('input',()=>{ featuresEl.value=modalText.value; });
+modal.addEventListener('click',e=>{ if(e.target===modal) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!modal.hidden) closeModal(); });
+
+// ---- model settings (⚙️ model name / API Key / Base URL) ----
+const setModal=q('setModal'), openSettings=q('openSettings');
+let curSettings=null;
+const originLabel=o=> o==='ui'?'本页设置':(o==='env'?'.env / 环境':'默认');
+
+function markKeyState(hasKey){
+  openSettings.classList.toggle('warn', !hasKey);
+  openSettings.textContent = hasKey ? '⚙️ 模型设置' : '⚙️ 配置模型';
+}
+function fillSettings(s){
+  if(!s) return;
+  const o=s.origin||{};
+  // input holds the user's OWN override (blank if inheriting env/default); placeholder shows the effective value
+  q('setModel').value = o.model==='ui' ? (s.model||'') : '';
+  q('setModel').placeholder = s.model || 'claude-sonnet-5';
+  q('setBase').value = o.base_url==='ui' ? (s.base_url||'') : '';
+  q('setBase').placeholder = s.base_url || '如 https://openrouter.ai/api/v1，留空用默认';
+  q('setDescModel').value = s.describe_model || '';
+  q('setKey').value='';
+  q('setKeyHint').textContent = s.has_key
+    ? ('已配置密钥 '+(s.key_hint||'****')+'（来源：'+originLabel(o.api_key)+'）· 留空则不修改')
+    : '尚未配置 API Key（生成前需先填写，或在 .env 设置 ANTHROPIC_API_KEY）';
+  markKeyState(s.has_key);
+}
+async function loadSettings(){
+  try{ curSettings=await (await fetch('/api/settings')).json(); }catch(_){ curSettings=null; }
+  return curSettings;
+}
+function setSetStatus(m,err){ const s=q('setStatus'); s.textContent=m||'';
+  s.className='status'+(err?' err':'')+(m?' show':''); }
+async function postSettings(){
+  const body={ model:q('setModel').value.trim(), base_url:q('setBase').value.trim(),
+               describe_model:q('setDescModel').value.trim() };
+  const k=q('setKey').value.trim();
+  if(k) body.api_key=k;                              // blank key field = keep current key
+  const r=await fetch('/api/settings',{method:'POST',
+            headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  curSettings=await r.json(); fillSettings(curSettings); return curSettings;
+}
+openSettings.onclick=async()=>{ await loadSettings(); fillSettings(curSettings);
+  setSetStatus(''); setModal.hidden=false; q('setModel').focus(); };
+q('setClose').onclick=()=>setModal.hidden=true;
+setModal.addEventListener('click',e=>{ if(e.target===setModal) setModal.hidden=true; });
+q('setKeyShow').onclick=()=>{ const i=q('setKey'), show=i.type==='password';
+  i.type=show?'text':'password'; q('setKeyShow').textContent=show?'隐藏':'显示'; };
+q('setSave').onclick=async()=>{ setSetStatus('保存中 …');
+  try{ await postSettings(); setSetStatus('✓ 已保存，立即生效'); }
+  catch(e){ setSetStatus('保存失败：'+(e.message||e), true); } };
+q('setClear').onclick=async()=>{
+  if(!confirm('清除本页设置的 API Key？之后将回退到 .env / 环境变量。')) return;
+  setSetStatus('清除中 …');
+  try{ const r=await fetch('/api/settings',{method:'POST',
+         headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:''})});
+    curSettings=await r.json(); fillSettings(curSettings); setSetStatus('✓ 已清除本页密钥'); }
+  catch(e){ setSetStatus('清除失败：'+(e.message||e), true); } };
+q('setTest').onclick=async()=>{
+  setSetStatus('测试中 …（会先保存当前设置，并消耗极少量额度）');
+  try{ await postSettings();
+    const d=await (await fetch('/api/settings/test',{method:'POST'})).json();
+    if(d.ok) setSetStatus('✓ 连接成功 · 模型：'+d.model+' · 地址：'+(d.base_url||'默认'));
+    else setSetStatus('✗ 连接失败：'+(d.error||'未知错误'), true);
+  }catch(e){ setSetStatus('测试失败：'+(e.message||e), true); } };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!setModal.hidden) setModal.hidden=true; });
+loadSettings().then(s=>{ if(s) markKeyState(s.has_key); });
+
+refreshUI();
+</script>
+</body>
+</html>

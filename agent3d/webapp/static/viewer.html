@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D 查看器</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#15181c;font-family:system-ui,sans-serif}
+  #ui{position:fixed;top:12px;left:12px;z-index:10;display:flex;gap:8px}
+  button{padding:8px 14px;border:0;border-radius:8px;background:#262b32;color:#e6e6e6;
+         cursor:pointer;font-size:14px}
+  button.active{background:#3a7afe;color:#fff}
+  #hint{position:fixed;bottom:10px;left:12px;color:#6b7280;font-size:12px;z-index:10}
+  #err{position:fixed;top:50%;left:0;right:0;text-align:center;color:#ff6b6b;font-size:14px}
+</style>
+<!-- three.js is vendored locally (static/vendor/three, copied from three@0.184.0) so the
+     viewer works fully offline / air-gapped — no unpkg CDN. If you ever need to update
+     three, re-copy build/three.module.js + examples/jsm into static/vendor/three. -->
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
+}}
+</script>
+</head>
+<body>
+<div id="ui">
+  <button id="btn-glb" class="active">实景 (GLB)</button>
+  <button id="btn-vox">体素 (Litematic)</button>
+  <button id="btn-blast">打击</button>
+  <button id="btn-inspect">🔍 剖析</button>
+  <button id="btn-rot">自动旋转: 关</button>
+</div>
+<div id="hint">拖动=旋转 · 滚轮=缩放 · 右键拖动=平移</div>
+<div id="err"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createBlastSystem } from './blast.js';
+import { createBlastUI } from './blast_ui.js';
+import { createInspectSystem } from './inspect.js';
+import { createInspectUI } from './inspect_ui.js';
+import { buildAtlasTexture, createVoxelMaterial, tileForMaterial } from './voxel_material.js';
+
+const q = new URLSearchParams(location.search);
+const scene_id = q.get('scene');
+const GLB_URL = q.get('glb') || (scene_id ? `/api/scenes/${scene_id}/model.glb` : 'model.glb');
+const VOX_URL = q.get('vox') || (scene_id ? `/api/scenes/${scene_id}/voxels.json` : 'voxels.json');
+const wantBlast = q.get('blast') === '1' || q.get('mode') === 'blast';   // opened from the blast-sim page
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.localClippingEnabled = true;   // enable the section-cut (剖切) clipping plane used by inspect mode
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x15181c);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 8000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotateSpeed = 1.4;
+
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const ambient = new THREE.AmbientLight(0xffffff, 1.55); scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(1, 2, 1.5); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 1.1); fill.position.set(-1.2, 1.0, -1.2); scene.add(fill);
+const hemi = new THREE.HemisphereLight(0xdfeeff, 0x55504a, 1.15); scene.add(hemi);
+scene.add(new THREE.GridHelper(500, 50, 0x2a2f36, 0x22262c));
+
+// Per-view lighting profiles (applied on view switch).
+const LIGHT = {
+  glb: { exposure: 1.25, ambient: 1.55, sun: 2.6, fill: 1.1,  hemi: 1.15 },
+  // Voxels used to run dim so flat-coloured cubes wouldn't wash out. Now that they carry a
+  // texture-atlas surface + baked AO, run brighter (close to the GLB) so the "实景感" reads
+  // through — the atlas detail (~0.85 mean) and AO still give the contrast/shape cues.
+  vox: { exposure: 1.15, ambient: 1.20, sun: 2.2, fill: 0.9,  hemi: 1.0  },
+};
+function applyLight(which) {
+  const p = LIGHT[which] || LIGHT.glb;
+  renderer.toneMappingExposure = p.exposure;
+  ambient.intensity = p.ambient;
+  sun.intensity = p.sun;
+  fill.intensity = p.fill;
+  hemi.intensity = p.hemi;
+}
+applyLight('glb');   // GLB is the default active view
+
+const glbGroup = new THREE.Group();
+const voxGroup = new THREE.Group();
+scene.add(glbGroup); scene.add(voxGroup);
+voxGroup.visible = false;
+
+// ---- blast module (client-side; initialised once voxels.json is loaded) ----
+let blast = null, blastUI = null, blastMode = false;
+function initBlast(mesh, v) {
+  blast = createBlastSystem({ scene, camera, renderer, controls, voxGroup, mesh, voxData: v });
+  blastUI = createBlastUI(blast);
+  document.body.appendChild(blastUI.element);
+}
+
+// ---- inspect module (剖析: 半透明透视 / 分层展开 / 剖切; shares the same voxel mesh) ----
+let inspect = null, inspectUI = null;
+function initInspect(mesh, v) {
+  inspect = createInspectSystem({ voxGroup, mesh, voxData: v, blast });
+  inspectUI = createInspectUI(inspect);
+  document.body.appendChild(inspectUI.element);
+}
+
+function fit(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxd = Math.max(size.x, size.y, size.z) || 10;
+  controls.target.copy(center);
+  camera.position.copy(center).add(new THREE.Vector3(1, 0.75, 1).normalize().multiplyScalar(maxd * 1.7 + 6));
+  camera.near = maxd / 100; camera.far = maxd * 40; camera.updateProjectionMatrix();
+  controls.update();
+}
+
+// ---- GLB (visual model) ----
+new GLTFLoader().load(GLB_URL, g => { glbGroup.add(g.scene); if (glbGroup.visible) fit(glbGroup); },
+  undefined, e => showErr('GLB 加载失败: ' + e.message));
+
+// ---- Litematic voxels (decoded server-side into voxels.json) ----
+fetch(VOX_URL).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
+  .then(v => {
+    if (!v || !v.count) return;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    // Textured voxel material (per-material atlas tile × per-instance colour). One draw
+    // call, so blast.js / inspect.js keep operating on this exact mesh unchanged.
+    const atlasTex = buildAtlasTexture();
+    const mat = createVoxelMaterial(atlasTex);
+    const mesh = new THREE.InstancedMesh(geo, mat, v.count);
+    const m = new THREE.Matrix4();
+    const palette = (v.palette || []).map(h => new THREE.Color(h));
+    // Prefer the real GLB per-voxel colours (rich ~20-colour palette: teal domes, blue
+    // water/glass, terracotta roofs …); fall back to the ~9-colour Minecraft block palette.
+    const meshPal = (v.mesh_palette || []).map(h => new THREE.Color(h));
+    const meshColors = v.mesh_colors;
+    const useMesh = meshPal.length > 0 && Array.isArray(meshColors) && meshColors.length === v.count;
+    const fallback = new THREE.Color('#888888');
+    const [w, hgt, l] = v.dims;      // dims = [width(x), height(y-up), length(z)]
+    const cx = w / 2, cz = l / 2;    // centre XZ, sit on ground (y stays)
+    const b = v.blocks;
+
+    // ---- per-instance atlas tile index (material -> tile) ----
+    // Primary: exact per-voxel material (v.mat_indices, injected by attach_materials for
+    // scenes voxelised after this feature). Fallback: v.palette_material (per palette index,
+    // present on all scenes via attach_resistance) so already-generated scenes are textured
+    // too, just at block granularity. Last resort: tile 0.
+    const matIdx = v.mat_indices, matKeys = v.mat_keys;
+    const hasMat = Array.isArray(matIdx) && Array.isArray(matKeys) && matIdx.length === v.count;
+    const tileByMatIdx = hasMat ? matKeys.map(tileForMaterial) : null;
+    const palMat = v.palette_material;
+    const tileByPalIdx = Array.isArray(palMat) ? palMat.map(tileForMaterial) : null;
+    const tileAttr = new Float32Array(v.count);
+
+    // ---- baked ambient occlusion (one-time, O(count); zero per-frame cost) ----
+    // Darken voxels sitting in concave pockets / inside corners so the blocky model reads
+    // with real depth, WITHOUT darkening flat wall faces. For each exposed (air-facing)
+    // face we sample the 8 neighbours of the AIR cell in that face's plane (Minecraft-style
+    // front-layer sampling): a flat wall's front layer is all air → stays bright; an inside
+    // corner's front layer has solids → soft shadow. AO is averaged over exposed faces and
+    // multiplied into the per-voxel colour (instanceColor). Skipped for very large scenes
+    // to keep load snappy — the flat colour still looks fine there.
+    const AO_STRENGTH = 0.55, AO_MAX_VOX = 1500000;
+    let occ = null;
+    if (v.count <= AO_MAX_VOX && w * hgt * l <= 60000000) {
+      occ = new Uint8Array(w * l * hgt);
+      const gi = (x, y, z) => x + w * (z + l * y);
+      for (let i = 0; i < v.count; i++) occ[gi(b[i * 4], b[i * 4 + 1], b[i * 4 + 2])] = 1;
+      var solid = (x, y, z) => (x < 0 || x >= w || y < 0 || y >= hgt || z < 0 || z >= l) ? 0 : occ[gi(x, y, z)];
+      // 6 face directions, and for each, the 8 in-plane offsets to test on the AIR cell.
+      var FACES = [
+        [1, 0, 0, [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1]]],
+        [-1, 0, 0, [[0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1]]],
+        [0, 1, 0, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [1, 0, 1], [1, 0, -1], [-1, 0, 1], [-1, 0, -1]]],
+        [0, -1, 0, [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [1, 0, 1], [1, 0, -1], [-1, 0, 1], [-1, 0, -1]]],
+        [0, 0, 1, [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [1, 1, 0], [1, -1, 0], [-1, 1, 0], [-1, -1, 0]]],
+        [0, 0, -1, [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [1, 1, 0], [1, -1, 0], [-1, 1, 0], [-1, -1, 0]]],
+      ];
+    }
+    function aoFactor(x, y, z) {
+      if (!occ) return 1;
+      let shade = 0, faces = 0;
+      for (let f = 0; f < 6; f++) {
+        const F = FACES[f], ax = x + F[0], ay = y + F[1], az = z + F[2];
+        if (solid(ax, ay, az)) continue;      // face is buried, not visible → no AO
+        faces++;
+        let s = 0; const ring = F[3];
+        for (let r = 0; r < 8; r++) s += solid(ax + ring[r][0], ay + ring[r][1], az + ring[r][2]);
+        shade += s / 8;
+      }
+      return faces ? 1 - AO_STRENGTH * (shade / faces) : 1;
+    }
+
+    const _c = new THREE.Color();
+    for (let i = 0; i < v.count; i++) {
+      const x = b[i * 4], y = b[i * 4 + 1], z = b[i * 4 + 2], idx = b[i * 4 + 3];
+      m.makeTranslation(x - cx + 0.5, y + 0.5, z - cz + 0.5);
+      mesh.setMatrixAt(i, m);
+      _c.copy((useMesh ? meshPal[meshColors[i]] : palette[idx]) || fallback);
+      const ao = aoFactor(x, y, z);
+      if (ao !== 1) _c.multiplyScalar(ao);
+      mesh.setColorAt(i, _c);
+      tileAttr[i] = (tileByMatIdx ? tileByMatIdx[matIdx[i]]
+        : (tileByPalIdx ? tileByPalIdx[idx] : 0)) || 0;   // || 0 guards against NaN in the shader
+    }
+    geo.setAttribute('tileIndex', new THREE.InstancedBufferAttribute(tileAttr, 1));
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    occ = null;   // release the AO occupancy grid; blast builds its own
+    voxGroup.add(mesh);
+    voxGroup.scale.setScalar(v.pitch_m || 1);   // 1 block = pitch_m metres, matches the GLB scale
+    initBlast(mesh, v);                          // hand the voxel mesh + data to the blast module
+    initInspect(mesh, v);                        // 剖析 inspection modes share the same voxel mesh
+    if (wantBlast) show('blast');                // land straight in strike mode (opened for blasting)
+    else if (voxGroup.visible) fit(voxGroup);
+  })
+  .catch(e => { if (wantBlast) showErr('体素加载失败: ' + e.message); });   // voxels optional off the blast page
+
+// ---- UI ----
+let rotating = false;
+const bg = byId('btn-glb'), bv = byId('btn-vox'), bb = byId('btn-blast'), bi = byId('btn-inspect'), br = byId('btn-rot');
+if (wantBlast) bv.style.display = 'none';   // 体素 view is redundant with 打击 in the blast-sim page
+function show(which) {
+  const isGlb = which === 'glb';
+  glbGroup.visible = isGlb;
+  voxGroup.visible = !isGlb;                    // 'vox', 'blast', 'inspect' all show the voxels
+  bg.classList.toggle('active', which === 'glb');
+  bv.classList.toggle('active', which === 'vox');
+  bb.classList.toggle('active', which === 'blast');
+  bi.classList.toggle('active', which === 'inspect');
+  applyLight(isGlb ? 'glb' : 'vox');
+  fit(isGlb ? glbGroup : voxGroup);
+  blastMode = which === 'blast';
+  if (blastUI) blastUI.setVisible(blastMode);
+  if (blast) blast.setPickMarkerVisible(blastMode);
+  const inspectMode = which === 'inspect';
+  if (inspect && !inspectMode) inspect.reset();          // restore opacity/offsets/clipping when leaving 剖析
+  if (inspectUI) inspectUI.setVisible(inspectMode);
+  if (blastMode && rotating) { rotating = false; controls.autoRotate = false; br.textContent = '自动旋转: 关'; }
+}
+bg.onclick = () => show('glb');
+bv.onclick = () => show('vox');
+bb.onclick = () => show('blast');
+bi.onclick = () => show('inspect');
+br.onclick = () => { rotating = !rotating; controls.autoRotate = rotating;
+                     br.textContent = '自动旋转: ' + (rotating ? '开' : '关'); };
+
+// ---- click-to-pick the strike point (blast mode only; ignore orbit drags) ----
+let _downX = 0, _downY = 0, _downT = 0;
+renderer.domElement.addEventListener('pointerdown', e => { _downX = e.clientX; _downY = e.clientY; _downT = performance.now(); });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!blastMode || !blast) return;
+  if (Math.hypot(e.clientX - _downX, e.clientY - _downY) < 6 && performance.now() - _downT < 500)
+    blast.pick(e.clientX, e.clientY);
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+(function loop() { requestAnimationFrame(loop); controls.update(); if (blast) blast.update(); if (inspect) inspect.update(); renderer.render(scene, camera); })();
+
+function byId(id) { return document.getElementById(id); }
+function showErr(msg) { byId('err').textContent = msg; }
+</script>
+</body>
+</html>
