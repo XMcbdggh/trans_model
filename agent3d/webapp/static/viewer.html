@@ -48,6 +48,7 @@ const scene_id = q.get('scene');
 const GLB_URL = q.get('glb') || (scene_id ? `/api/scenes/${scene_id}/model.glb` : 'model.glb');
 const VOX_URL = q.get('vox') || (scene_id ? `/api/scenes/${scene_id}/voxels.json` : 'voxels.json');
 const wantBlast = q.get('blast') === '1' || q.get('mode') === 'blast';   // opened from the blast-sim page
+const noStrike  = q.get('nostrike') === '1';   // opened from the 实景模型 page: view only, hide 打击
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -226,6 +227,7 @@ fetch(VOX_URL).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
 let rotating = false;
 const bg = byId('btn-glb'), bv = byId('btn-vox'), bb = byId('btn-blast'), bi = byId('btn-inspect'), br = byId('btn-rot');
 if (wantBlast) bv.style.display = 'none';   // 体素 view is redundant with 打击 in the blast-sim page
+if (noStrike) bb.style.display = 'none';    // 实景模型 page is view-only: no 打击
 function show(which) {
   const isGlb = which === 'glb';
   glbGroup.visible = isGlb;

@@ -1,5 +1,6 @@
 # Secrets
 .env
+agent3d_settings.json
 
 # Python
 __pycache__/
@@ -21,3 +22,13 @@ scene_out/
 scene_out_compound/
 scene_ground_test/
 scene_prog_test/
+
+# Windows packaging (scripts under packaging/ are tracked; build outputs are not)
+packaging/_cache/
+packaging/_stage/
+packaging/_trash_*/
+packaging/_stage_trash_*/
+dist/
+*.zip
+Agent3D-Setup.exe
+agent3d.pid

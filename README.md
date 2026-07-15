@@ -200,6 +200,25 @@ A: 生成产物体积大且可复现，已用 `.gitignore` 排除；本地跑流
 
 ---
 
+## 给客户的 Windows 一键部署（无需 WSL / Docker）
+
+面向「不会装 Python、没有 Docker」的 Windows 客户。打包脚本会嵌入 Python 运行时，产出：
+
+| 文件 | 用途 |
+|------|------|
+| `dist/Agent3D-Windows-x64.zip` | **主交付物**：解压后双击「开始 Agent3D.bat」 |
+| `dist/Agent3D-Setup.exe` | 可选安装包（需本机有 [Inno Setup 6](https://jrsoftware.org/isinfo.php)） |
+
+```powershell
+.\packaging\build.ps1              # 出 Zip；有 Inno 时顺带出 Setup.exe
+.\packaging\build.ps1 -InstallInno # 顺带静默安装 Inno 再出 Setup.exe
+.\packaging\publish-release.ps1 -Tag v1.0.0   # 挂到 GitHub Release（勿 commit zip/exe）
+```
+
+产物在 `dist/`，已被 `.gitignore` 忽略。完整步骤（构建、冒烟、网页挂附件、客户使用、检查清单）见 **[packaging/README.md](packaging/README.md)**。
+
+---
+
 ## License
 
 本仓库代码与文档按项目约定使用；第三方库（如 three.js、trimesh 等）遵循各自许可证。
