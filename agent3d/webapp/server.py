@@ -147,10 +147,14 @@ def _job_result(scene_id: str, name: str, spec_doc, description: str, manifest: 
     }
 
 
-def _run_generate(job_id: str, payload, spec: str, description: str, gen_mode: str) -> None:
-    """Worker thread: image/spec -> param -> visual GLB only (voxels are produced later on
-    the blast page at a chosen resolution). Writes real stage names into JOBS[job_id] via
-    the ``prog`` callback so the browser can poll live progress."""
+def _run_generate(job_id: str, payload, spec: str, description: str, gen_mode: str,
+                  make_voxels: bool = False, blocks_per_meter: float | None = None) -> None:
+    """Worker thread: image/spec -> param -> 3D artifacts. Writes real stage names into
+    JOBS[job_id] via the ``prog`` callback so callers can poll live progress.
+
+    By default builds only the visual GLB (voxels are produced later on the blast page at
+    a chosen resolution). The v1 API passes ``make_voxels=True`` (+ ``blocks_per_meter``)
+    so a single call yields GLB + litematic + voxels, immediately downloadable."""
     job = JOBS[job_id]
 
     def prog(stage, detail=""):
@@ -190,7 +194,9 @@ def _run_generate(job_id: str, payload, spec: str, description: str, gen_mode: s
 
         name = ((spec_doc or {}).get("meta") or {}).get("name") \
             or (param.get("project") or {}).get("name") or scene_id
-        manifest = build_scene(param, scene_dir, name=name, make_voxels=False, progress=prog)
+        bpm = blocks_per_meter if blocks_per_meter is not None else BPM
+        manifest = build_scene(param, scene_dir, name=name, make_voxels=make_voxels,
+                               blocks_per_meter=bpm, progress=prog)
         job["result"] = _job_result(scene_id, name, spec_doc, description, manifest, model_used)
         job["stage"] = "完成"
     except Exception as exc:
@@ -342,6 +348,14 @@ def scene_file(scene_id: str, filename: str):
     # voxels.json is overwritten by re-voxelization; never let a stale copy be cached.
     headers = {"Cache-Control": "no-store"} if filename == "voxels.json" else None
     return FileResponse(fp, headers=headers)
+
+
+# Versioned external REST API (/api/v1) for programmatic clients. Registered BEFORE the
+# static mount below so its routes take precedence over the catch-all "/" mount. Imported
+# here (bottom of module) so api_v1's lazy access to this module never forms a cycle.
+from agent3d.webapp.api_v1 import router as v1_router   # noqa: E402
+
+app.include_router(v1_router)
 
 
 # static UI (index.html upload page + viewer.html) served at the site root.

@@ -1,0 +1,26 @@
+# Single-container deployment of the agent3d API + web service.
+#   docker compose up --build      start (build on first run / after code changes)
+#   docker compose down            stop (the agent3d_data volume, and your models, persist)
+services:
+  agent3d:
+    build: .
+    image: agent3d:latest
+    ports:
+      - "8060:8060"
+    environment:
+      # Artifacts persist in the named volume below, not in the ephemeral container FS.
+      AGENT3D_SCENES: /data
+      # Voxel resolution (blocks per meter) and default image path can be tuned here.
+      # AGENT3D_BPM: "4.0"
+      # AGENT3D_GEN_MODE: param
+    # API keys / model config: put ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, etc. in a .env
+    # file next to this compose file. Pure spec->3D calls need no key.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - agent3d_data:/data
+    restart: unless-stopped
+
+volumes:
+  agent3d_data:

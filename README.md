@@ -116,6 +116,66 @@ copy .env.example .env
 
 ---
 
+## REST API 服务（`/api/v1`）
+
+除网页外，服务还对外暴露一组稳定、版本化的 REST 接口，供其它程序调用（与网页共用同一进程与端口）。**2D→3D 是异步的**：提交任务拿 `job_id` → 轮询状态 → 成功后用返回的资源地址下载模型文件。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/models` | 提交生成任务。multipart 字段：`images`（可多图）+ `description`；或直接传 `spec`（现成 Building Spec JSON）。可选 `mode`（`param`\|`spec`）、`bpm`（体素分辨率）。返回 `{ job_id }` |
+| GET | `/api/v1/jobs/{job_id}` | 轮询任务。`status` ∈ `queued`/`running`/`succeeded`/`failed`；成功时返回 `scene_id` 与 `resources`（下载地址） |
+| GET | `/api/v1/models` | 列出已生成模型（含 `resources`） |
+| GET | `/api/v1/models/{scene_id}` | 单个模型元数据 + `resources` |
+| GET | `/api/v1/models/{scene_id}/glb` | 下载 `model.glb`（`model/gltf-binary`） |
+| GET | `/api/v1/models/{scene_id}/litematic` | 下载 `model.litematic` |
+| GET | `/api/v1/models/{scene_id}/voxels` | 下载 `voxels.json` |
+
+下载接口对不可变的 GLB / litematic 带 `ETag` + `Cache-Control: immutable` 且支持断点续传（`Range`）；文件尚未产出时返回 `409`。交互式接口文档见 `http://<host>:8060/docs`。
+
+调用示例（不需要 API Key，用示例 Spec 生成）：
+
+```bash
+# 1) 提交（用现成 spec，省去视觉模型）
+JOB=$(curl -s -F "spec=@agent3d/examples/two_storey_house.spec.json;type=application/json" \
+  http://127.0.0.1:8060/api/v1/models | python -c "import sys,json;print(json.load(sys.stdin)['job_id'])")
+
+# 2) 轮询直到 succeeded，拿到 scene_id
+curl -s http://127.0.0.1:8060/api/v1/jobs/$JOB
+
+# 3) 下载 GLB / litematic（把 SCENE 换成上一步返回的 scene_id）
+curl -o model.glb        http://127.0.0.1:8060/api/v1/models/SCENE/glb
+curl -o model.litematic  http://127.0.0.1:8060/api/v1/models/SCENE/litematic
+```
+
+用图片生成：把上面的 `-F spec=...` 换成 `-F "images=@a.jpg" -F "description=..."`（需要配置 `ANTHROPIC_API_KEY`）。
+
+---
+
+## Docker 部署（单容器）
+
+面向单容器部署，模型产物落到**持久化卷**（不随容器重建丢失）。
+
+```bash
+# 构建并启动（首次或改代码后加 --build）
+docker compose up --build
+# 停止（agent3d_data 卷与其中的模型会保留）
+docker compose down
+```
+
+- 服务监听容器内 `8060`，compose 映射到宿主 `8060`。
+- 产物目录由环境变量 `AGENT3D_SCENES=/data` 指定，挂到命名卷 `agent3d_data`。
+- 需要视觉模型时，在 compose 同目录放 `.env`（含 `ANTHROPIC_API_KEY` 等）；纯 `spec`→3D 无需 Key，`.env` 可省略。
+- 不用 compose 时等价命令：
+
+```bash
+docker build -t agent3d .
+docker run -d -p 8060:8060 -v agent3d_data:/data -e AGENT3D_SCENES=/data --env-file .env agent3d
+```
+
+> 说明：任务进度存于进程内存，容器重启会丢失「进行中」的任务，但已生成的模型文件都在卷里，不受影响。单容器场景无需 Redis / 对象存储；未来若横向扩容，可将 `resources` 指向对象存储（客户端契约不变）。
+
+---
+
 ## 使用方式
 
 ### 方式一：网页（推荐）
@@ -171,7 +231,7 @@ trans_model/
 │   ├── schema/               # Building Spec JSON Schema
 │   ├── examples/             # 可运行示例
 │   ├── skills/               # Skill A / Skill B
-│   └── webapp/               # FastAPI + 静态前端（index / viewer / blast）
+│   └── webapp/               # FastAPI 服务（server.py + REST API api_v1.py）+ 静态前端
 ├── stand_trans/              # 参数化建筑 → GLB / litematic 既有管道
 ├── docs/images/              # README 截图
 ├── AGENT_3D_PIPELINE.md      # 完整设计 / 复现 / 扩展文档

@@ -1,0 +1,15 @@
+# Keep the build context small & reproducible.
+.git
+.gitignore
+artifacts_web/
+dist/
+packaging/
+docs/
+terminals/
+**/__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+*.log

@@ -21,6 +21,19 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+
+def _atomic_write_bytes(dst: Path, data: bytes) -> None:
+    """Write bytes to ``dst`` atomically (temp file in the same dir + os.replace), so a
+    concurrent reader never observes a half-written file. Re-voxelization overwrites
+    model.litematic / voxels.json in place while the API may be serving them."""
+    tmp = dst.with_name(dst.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, dst)
+
+
+def _atomic_write_text(dst: Path, text: str) -> None:
+    _atomic_write_bytes(dst, text.encode("utf-8"))
+
 from stand_trans.pipeline import convert                     # noqa: E402
 from stand_trans.step4_voxel import litematic_to_voxels      # noqa: E402
 from stand_trans.shared import materials as _materials       # noqa: E402
@@ -178,7 +191,7 @@ def _pack_voxels(scene_dir: Path, lit_dst: Path, name: str, blocks_per_meter: fl
     sidecar = scene_dir / f"{name}.voxelclass.json"
     attach_mesh_colors(vox, sidecar)                           # real GLB colours for the voxel view
     attach_materials(vox, sidecar)                             # per-voxel material -> atlas tile (textured voxels)
-    (scene_dir / "voxels.json").write_text(json.dumps(vox), encoding="utf-8")
+    _atomic_write_text(scene_dir / "voxels.json", json.dumps(vox))   # atomic: never serve a half-written re-voxelization
     return vox
 
 
@@ -228,7 +241,7 @@ def build_scene(param, scene_dir, *, name="scene", blocks_per_meter: float = 4.0
         lit_src = Path(res.litematic_path)
         lit_dst = scene_dir / "model.litematic"
         if lit_src.resolve() != lit_dst.resolve():
-            lit_dst.write_bytes(lit_src.read_bytes())
+            _atomic_write_bytes(lit_dst, lit_src.read_bytes())
         if progress: progress("解码体素并打包")
         vox = _pack_voxels(scene_dir, lit_dst, name, blocks_per_meter)
         manifest["litematic"] = "model.litematic"
@@ -274,7 +287,7 @@ def voxelize_scene(scene_dir, *, blocks_per_meter: float, name: str | None = Non
     build_litematic(param, bim, lit_src, blocks_per_meter=blocks_per_meter, name=name)
     lit_dst = scene_dir / "model.litematic"
     if lit_src.resolve() != lit_dst.resolve():
-        lit_dst.write_bytes(lit_src.read_bytes())
+        _atomic_write_bytes(lit_dst, lit_src.read_bytes())
 
     if progress: progress("解码体素并打包")
     vox = _pack_voxels(scene_dir, lit_dst, name, blocks_per_meter)
